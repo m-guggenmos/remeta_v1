@@ -22,55 +22,62 @@ Three types of data are required to fit a model:
 A minimal example would be the following:
 ```python
 # Minimal example
-import remeta
-x_stim, d_dec, c_conf = remeta.load_dataset('simple')  # load example dataset
+import remeta_v1 as remeta
+x_stim, d_dec, c_conf = remeta.load_dataset('default', return_params=True)  # load example dataset
 rem = remeta.ReMeta()
 rem.fit(x_stim, d_dec, c_conf)
 ```
-Output:
+Output (for load_dataset):
 ```
-Loading dataset 'simple' which was generated as follows:
+Loading dataset 'default' which was generated as follows:
 ..Generative model:
     Type 2 noise type: noisy_report
-    Type 2 noise distribution: truncated_norm
-    Confidence link function: bayesian_confidence
+    Type 2 noise distribution: beta
 ..Generative parameters:
-    type1_noise: 0.7
-    type1_bias: 0.2
-    type2_noise: 0.1
-    type2_evidence_bias_mult: 1.2
+    type1_noise: 0.5
+    type1_bias: -0.1
+    type2_noise: 0.2
+    type2_criteria: [0.2, 0.2, 0.2, 0.2] = gaps | criteria = [0.2, 0.4, 0.6, 0.8]
 ..Characteristics:
     No. subjects: 1
     No. samples: 1000
-    Type 1 performance: 78.5%
-    Avg. confidence: 0.668
-    M-Ratio: 0.921
+    Type 1 performance: 86.4%
+    Avg. confidence: 0.620
+    M-Ratio: 0.549
+    Criterion bias: 0
+```
+Output (for fit):
+```
 +++ Type 1 level +++
-Initial guess (neg. LL: 1902.65)
-    [guess] type1_noise: 0.1
+Initial guess (neg. LL: 354.54)
+    [guess] type1_noise: 0.5
     [guess] type1_bias: 0
 Performing local optimization
-    [final] type1_noise: 0.745
-    [final] type1_bias: 0.24
-Final neg. LL: 461.45
-Total fitting time: 0.13 secs
+    [final] type1_noise: 0.514
+    [final] type1_bias: -0.0913
+Final neg. LL: 348.77
+Total fitting time: 0.11 secs
 +++ Type 2 level +++
-Initial guess (neg. LL: 1938.81)
+Initial guess (neg. LL: 1808.28)
     [guess] type2_noise: 0.2
-    [guess] type2_evidence_bias_mult: 1
-Grid search activated (grid size = 160)
-    [grid] type2_noise: 0.15
-    [grid] type2_evidence_bias_mult: 1.3
-Grid neg. LL: 1879.1
-Grid runtime: 3.22 secs
+    [guess] type2_criteria_0: 0.2
+    [guess] type2_criteria_1: 0.2 = gap | criterion = 0.4
+    [guess] type2_criteria_2: 0.2 = gap | criterion = 0.6
+    [guess] type2_criteria_3: 0.2 = gap | criterion = 0.8
 Performing local optimization
-    [final] type2_noise: 0.102
-    [final] type2_evidence_bias_mult: 1.21
-Final neg. LL: 1872.24
-Total fitting time: 3.9 secs
+1805.8993964328206
+    [final] type2_noise: 0.229
+    [final] type2_criteria_0: 0.207
+    [final] type2_criteria_1: 0.17 = gap | criterion = 0.377
+    [final] type2_criteria_2: 0.204 = gap | criterion = 0.581
+    [final] type2_criteria_3: 0.213 = gap | criterion = 0.794
+    [extra] type2_criteria_absolute: [0.207, 0.377, 0.581, 0.794]
+    [extra] type2_criteria_bias: -0.0077
+Final neg. LL: 1805.90
+Total fitting time: 3 secs
 ```
 
-Since the dataset is based on simulation, we know the true parameters (in brackets above) of the underlying generative model, which are indeed quite close to the fitted parameters.
+Since the dataset is based on simulation, we know the true parameters of the underlying generative model (see first output), which are quite close to the fitted parameters.
 
 We can access the fitted parameters by invoking the `summary()` method on the `ReMeta` instance:
 
@@ -78,18 +85,18 @@ We can access the fitted parameters by invoking the `summary()` method on the `R
 # Access fitted parameters
 result = rem.summary()
 for k, v in result.model.params.items():
-    print(f'{k}: {v:.3f}')
+    print(f"{k}: {', '.join(f'{x:.3f}' for x in (v if hasattr(v, '__len__') else [v]))}")
 ```
 
 Ouput:
 ```
-type1_noise: 0.745
-type1_bias: 0.240
-type2_noise: 0.102
-type2_evidence_bias_mult: 1.213
+type1_noise: 0.514
+type1_bias: -0.091
+type2_noise: 0.229
+type2_criteria: 0.207, 0.170, 0.204, 0.213
 ```
 
-By default, the model fits parameters for type 1 noise (`type1_noise`) and a type 1 bias (`type1_bias`), as well as metacognitive 'type 2' noise (`type2_noise`) and a metacognitive bias (`type2_evidence_bias_mult`). Moreover, by default the model assumes that metacognitive noise occurs at the stage of the confidence report (setting `type2_noise_type='noisy_report'`), that observers aim at reporting Bayesian confidence (setting `confidence_link_function='bayesian_confidence'`) and that type 2 metacognitive noise can be described by a truncated normal distribution (setting `type2_noise_dist='truncated_norm'`).
+By default, the model fits parameters for type 1 noise (`type1_noise`) and a type 1 bias (`type1_bias`), as well as metacognitive 'type 2' noise (`type2_noise`) and 4 confidence criteria (`type2_criteria`). Moreover, by default the model assumes that metacognitive noise occurs at the stage of the confidence report (setting `type2_noise_type='noisy_report'`) and that type 2 metacognitive noise can be described by a beta distribution (setting `type2_noise_dist='beta'`).
 
 All settings can be changed via the `Configuration` object which is optionally passed to the `ReMeta` instance. For example:
 
@@ -110,9 +117,9 @@ _Type 1 parameters_:
 
 _Type 2 (metacognitive) parameters:_
 - `type2_noise`: metacognitive noise
-- `type2_evidence_bias_mult`: multiplicative metacognitive bias
-- `type2_evidence_bias_add_meta`: additive metacognitive bias
+- `type2_criteria`: confidence criteria
+- `type2_evidence_bias_mult`: optional multiplicative metacognitive bias
 
-In addition, each parameter can be fitted in "duplex mode", such that separate values are fitted depending on the stimulus category (for type 1 parameters) or depending on the sign of the type 1 decision values (for type 2 parameters).
+In addition, each type 1 parameters can be fitted in "duplex mode", such that separate values are fitted depending on the stimulus category.
 
 A more detailed guide to use the toolbox is provided in the following Jupyter notebook: [**Basic Usage**](https://github.com/m-guggenmos/remeta_v1/blob/main/demo/basic_usage.ipynb)
