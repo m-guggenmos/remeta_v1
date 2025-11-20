@@ -381,6 +381,7 @@ class Model(ReprMixin):
             desc.update(dict(
                 nparams_type2=self.cfg.paramset_type2.nparams,
                 params_type2=self.params_type2,
+                params_type2_extra=self.params_type2_extra,
                 params={**self.params_type1, **self.params_type2},
                 nparams=self.cfg.paramset_type1.nparams + self.cfg.paramset_type2.nparams,
                 type2_model_evidence=dict(
