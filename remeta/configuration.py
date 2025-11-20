@@ -222,7 +222,6 @@ class Configuration(ReprMixin):
     experimental_wrap_type2_integration_window: bool = False
     experimental_include_incongruent_y_decval: bool = False
     experimental_disable_type2_binsize: bool = False
-    experimental_discrete_type2_fitting: bool = False
 
     true_params: Dict = None
     initilialize_fitting_at_true_params: bool = False
