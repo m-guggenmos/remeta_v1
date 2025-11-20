@@ -1,21 +1,17 @@
 Go directly to:
-- [**Start page**](https://github.com/coconeuro/remeta_v1/)
-- [**Installation** (this page)](https://github.com/coconeuro/remeta_v1/blob/main/INSTALL.md)
-- [**Basic Usage**](https://github.com/coconeuro/remeta_v1/blob/main/demo/basic_usage.ipynb)
-- [**Common use cases**](https://github.com/coconeuro/remeta_v1/blob/main/demo/common_use_cases.ipynb)
+- [**Start page**](https://github.com/m-guggenmos/remeta_v1/)
+- [**Installation** (this page)](https://github.com/m-guggenmos/remeta_v1/blob/main/INSTALL.md)
+- [**Basic Usage**](https://github.com/m-guggenmos/remeta_v1/blob/main/demo/basic_usage.ipynb)
+- [**Common use cases**](https://github.com/m-guggenmos/remeta_v1/blob/main/demo/common_use_cases.ipynb)
 
 # ReMeta Toolbox: installation
 
 Remeta requires a working Python installation. It should run with Python >=3.6.
 
 The ReMeta itself can be installed with `pip`:
-```
-pip install remeta
-```
 
-Or directly from GitHub:
 ```
-pip install git+https://github.com/coconeuro/remeta.git
+pip install git+https://github.com/m-guggenmos/remeta_v1.git
 ```
 (this command requires an installed Git, e.g. [gitforwindows](https://gitforwindows.org/))
 

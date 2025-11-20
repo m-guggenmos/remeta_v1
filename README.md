@@ -1,7 +1,7 @@
 Go directly to:
-- [**Installation**](https://github.com/coconeuro/remeta_v1/blob/main/INSTALL.md)
-- [**Basic Usage**](https://github.com/coconeuro/remeta_v1/blob/main/demo/basic_usage.ipynb)
-- [**Common use cases**](https://github.com/coconeuro/remeta_v1/blob/main/demo/common_use_cases.ipynb)
+- [**Installation**](https://github.com/m-guggenmos/remeta_v1/blob/main/INSTALL.md)
+- [**Basic Usage**](https://github.com/m-guggenmos/remeta_v1/blob/main/demo/basic_usage.ipynb)
+- [**Common use cases**](https://github.com/m-guggenmos/remeta_v1/blob/main/demo/common_use_cases.ipynb)
 
 
 # ReMeta Toolbox
@@ -115,4 +115,4 @@ _Type 2 (metacognitive) parameters:_
 
 In addition, each parameter can be fitted in "duplex mode", such that separate values are fitted depending on the stimulus category (for type 1 parameters) or depending on the sign of the type 1 decision values (for type 2 parameters).
 
-A more detailed guide to use the toolbox is provided in the following Jupyter notebook: [**Basic Usage**](https://github.com/coconeuro/remeta_v1/blob/main/demo/basic_usage.ipynb)
+A more detailed guide to use the toolbox is provided in the following Jupyter notebook: [**Basic Usage**](https://github.com/m-guggenmos/remeta_v1/blob/main/demo/basic_usage.ipynb)
