@@ -105,7 +105,7 @@ class Configuration(ReprMixin):
 
     *** Methodoligcal aspects of parameter fitting ***
     * Note: this applies to the fitting of type 2 parameters only.
-    gridsearch : bool (default: True)
+    gridsearch : bool (default: False)
         If True, perform initial (usually coarse) gridsearch search, based on the gridsearch defined for a Parameter.
     fine_gridsearch : bool (default: False)
         If True, perform an iteratively finer gridsearch search for each parameter.
@@ -201,7 +201,7 @@ class Configuration(ReprMixin):
 
     type1_noise_signal_dependency: str = 'none'
 
-    gridsearch: bool = True
+    gridsearch: bool = False
     fine_gridsearch: bool = False
     grid_multiproc: bool = False
     global_minimization: bool = False
