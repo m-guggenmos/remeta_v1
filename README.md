@@ -120,6 +120,6 @@ _Type 2 (metacognitive) parameters:_
 - `type2_criteria`: confidence criteria
 - `type2_evidence_bias_mult`: optional multiplicative metacognitive bias
 
-In addition, each type 1 parameters can be fitted in "duplex mode", such that separate values are fitted depending on the stimulus category.
+In addition, each type 1 parameter can be fitted in "duplex mode", such that separate values are fitted depending on the stimulus category.
 
 A more detailed guide to use the toolbox is provided in the following Jupyter notebook: [**Basic Usage**](https://github.com/m-guggenmos/remeta_v1/blob/main/demo/basic_usage.ipynb)
