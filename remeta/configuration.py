@@ -24,8 +24,6 @@ class Configuration(ReprMixin):
     type2_fitting_type : str (default: 'criteria')
         Whether confidence is fitted with discrete *criteria* or as a continuous variable.
         Possible values: 'criteria', 'continuous'
-    n_discrete_confidence_levels : int (default: 5)
-        Number of confidence criteria. Only applies in case of type2_fitting_type='criteria'.
     type2_noise_type : str (default: 'noisy-report)
         Whether the model considers noise at readout or report.
         Possible values: 'noisy_report', 'noisy_readout'
@@ -71,12 +69,18 @@ class Configuration(ReprMixin):
     enable_type2_param_criteria : int (default: 0)
         Fit confidence criteria.
 
+    *** Additional options to specify the nature of type 2 fitting ***
+    n_discrete_confidence_levels : int (default: 5)
+        Number of confidence criteria. Only applies in case of type2_fitting_type='criteria'.
+    type2_noise_logscale : bool (default: True)
+        If True, apply implicit log transform to the type 2 noise parameter.
+        Can be useful, if type 2 noise clusters tightly around 0.
+
     *** Define fitting characteristics of the parameters ***
     * The fitting of each parameter is characzerized as follows:
     *     1) An initial guess.
     *     2) Lower and upper bound.
-    *     3) Grid linspace, i.e. the range of values that are tested during the initial gridsearch search in
-    *        "numpy linspace" format (lower, upper, number_of_grid_points).
+    *     3) Grid range, i.e. list of values that are tested during the initial gridsearch search.
     * Sensible default values are provided for all parameters. To tweak those, one can either define an entire
     * ParameterSet, which is a container for a set of parameters, or each parameter individually. Note that the
     * parameters must be either defined as a Parameter instance or as List[Parameter] in case when separate values are
@@ -164,14 +168,13 @@ class Configuration(ReprMixin):
     force_settings : bool
         Some setting combinations are known to be incompatible and/or to produce biased fits. If True, fit the model
         nevertheless.
-    settings_ignore_warnings : bool (default: False)
+    silence_configuration_warnings : bool (default: False)
         If True, ignore warnings about user-specified settings.
     print_configuration : bool (default: True)
         If True, print the configuration at instatiation of the ReMeta class.
     """
 
     type2_fitting_type: str = 'criteria'
-    n_discrete_confidence_levels: int = 5
     type2_noise_type: str = 'noisy_report'
     type2_noise_dist: str = None
         # noisy-report + criteria -> 'beta'
@@ -187,6 +190,11 @@ class Configuration(ReprMixin):
     enable_type2_param_criteria : int = 1
     # Experimental:
     enable_type1_param_noise_heteroscedastic: int = 0
+
+    n_discrete_confidence_levels: int = 5
+    type2_noise_logscale: bool = True
+    _type2_noise_logscale_min: float = None
+
 
     paramset_type1: ParameterSet = None
     paramset_type2: ParameterSet = None
@@ -226,20 +234,20 @@ class Configuration(ReprMixin):
     true_params: Dict = None
     initilialize_fitting_at_true_params: bool = False
     force_settings: bool = False
-    settings_ignore_warnings: bool = False
+    silence_configuration_warnings: bool = False
     print_configuration: bool = False
 
     type2_param_noise_min: float = 0.001
 
-    _type1_param_noise_heteroscedastic_default: Parameter = Parameter(guess=0, bounds=(0, 10), grid_linspace=(0, 1, 5))
-    _type1_param_noise_default: Parameter = Parameter(guess=0.5, bounds=(1e-3, 100), grid_linspace=(0.1, 1, 8))
-    _type1_param_thresh_default: Parameter = Parameter(guess=0, bounds=(0, 1), grid_linspace=(0, 0.2, 5))
-    _type1_param_bias_default: Parameter = Parameter(guess=0, bounds=(-1, 1), grid_linspace=(-0.2, 0.2, 8))
-    _type2_param_noise_default: Parameter = Parameter(guess=0.2, bounds=(1e-2, 1), grid_linspace=(0.05, 1, 8))
+    _type1_param_noise_heteroscedastic_default: Parameter = Parameter(guess=0, bounds=(0, 10), grid_range=np.linspace(0, 1, 5))
+    _type1_param_noise_default: Parameter = Parameter(guess=0.5, bounds=(1e-3, 100), grid_range=np.linspace(0.1, 1, 8))
+    _type1_param_thresh_default: Parameter = Parameter(guess=0, bounds=(0, 1), grid_range=np.linspace(0, 0.2, 5))
+    _type1_param_bias_default: Parameter = Parameter(guess=0, bounds=(-1, 1), grid_range=np.linspace(-0.2, 0.2, 8))
+    _type2_param_noise_default: Parameter = Parameter(guess=0.2, bounds=(1e-2, 1), grid_range=np.linspace(0.05, 1, 8))
     _type2_param_evidence_bias_mult_default: Parameter = Parameter(guess=1, bounds=(0.5, 2),
-                                                                   grid_linspace=(0.5, 2, 8))
+                                                                   grid_range=np.linspace(0.5, 2, 8))
 
-    def setup(self):
+    def setup(self, force_settings=False):
 
         if self.slsqp_epsilon is None:
             if self.type2_noise_type == 'noisy_readout':
@@ -265,13 +273,13 @@ class Configuration(ReprMixin):
         self._check_compatibility()
 
         self._prepare_params_type1()
-        self._prepare_params_type2()
+        self._prepare_params_type2(force_settings=force_settings)
         if self.print_configuration:
             self.print()
 
     def _check_compatibility(self):
 
-        if not self.settings_ignore_warnings:
+        if not self.silence_configuration_warnings:
 
             if not self.enable_type2_param_noise:
                 warnings.warn(f'Setting enable_type2_param_noise=False was provided -> type2_param_noise is set to its default value '
@@ -302,16 +310,57 @@ class Configuration(ReprMixin):
             parameters = {k: getattr(self, f"type1_param_{k.split('type1_')[1]}") for k in param_names_type1}
             self.paramset_type1 = ParameterSet(parameters, param_names_type1)
 
-    def _prepare_params_type2(self):
+    def _log_transform(self, x, xmin=None):
+        if xmin is None:
+            xmin = self._type2_noise_logscale_min
+        return np.log10(x) - np.log10(xmin)
+
+    def _prepare_params_type2(self, force_settings=False):
 
         if self.paramset_type2 is None:
 
             if self.enable_type2_param_noise and self.type2_param_noise is None:
+                if self.type2_noise_logscale and self._type2_noise_logscale_min is None:
+                    self._type2_noise_logscale_min = 1e-8
                 if self.type2_noise_dist == 'beta':
-                    self._type2_param_noise_default.bounds = (1e-5, 0.5)
-                    self._type2_param_noise_default.grid_linspace = (0.05, 0.45, 10)
+                    self._type2_param_noise_default.bounds = (1e-8, 0.5)
+                    self._type2_param_noise_default.grid_range = np.exp(-np.linspace(10, 1, 10))
+                    if not self.type2_noise_logscale and not force_settings:
+                        self.type2_noise_logscale = True
+                        self._type2_noise_logscale_min = 1e-8
+                        if not self.silence_configuration_warnings:
+                            warnings.warn('Auto-setting cfg.type2_noise_logscale to True, since this is the\n'
+                                          'recommended setting for the beta type 2 noise distribution.\n' 
+                                          'To avoid this warning, set\n'
+                                          'cfg.type2_noise_logscale = True\n'
+                                          'or\n'
+                                          'cfg.silence_configuration_warnings = True\n'
+                                          'To override, use\n'
+                                          'cfg.type2_noise_logscale = False\n'
+                                          'rem = ReMeta(cfg, force_settings=True)', UserWarning)
+                elif self.type2_noise_dist == 'gamma':
+                    self._type2_param_noise_default.bounds = (1e-7, self._type2_param_noise_default.bounds[1])
+                    self._type2_param_noise_default.grid_range = np.exp(-np.linspace(10, 1, 10))
+                    if not self.type2_noise_logscale and not force_settings:
+                        self.type2_noise_logscale = True
+                        self._type2_noise_logscale_min = 1e-7
+                        if not self.silence_configuration_warnings:
+                            warnings.warn('Auto-setting cfg.type2_noise_logscale to True, since this is the\n'
+                                          'recommended setting for the gamma type 2 noise distribution.\n' 
+                                          'To avoid this warning, set\n'
+                                          'cfg.type2_noise_logscale = True\n'
+                                          'or\n'
+                                          'cfg.silence_configuration_warnings = True\n'
+                                          'To override, use\n'
+                                          'cfg.type2_noise_logscale = False\n'
+                                          'rem = ReMeta(cfg, force_settings=True)', UserWarning)
                 elif self.type2_noise_type == 'noisy_readout':
-                    self._type2_param_noise_default.bounds = (1e-5, 250)
+                    self._type2_param_noise_default.bounds = (1e-2, 10)
+
+                if self.type2_noise_logscale:
+                    self._type2_param_noise_default.guess = self._log_transform(self._type2_param_noise_default.guess)
+                    self._type2_param_noise_default.bounds = (0, self._log_transform(self._type2_param_noise_default.bounds[1]))
+                    self._type2_param_noise_default.grid_range = self._log_transform(self._type2_param_noise_default.grid_range)
 
             param_names_type2 = []
             params_type2 = ('noise', 'evidence_bias_mult')
@@ -339,13 +388,17 @@ class Configuration(ReprMixin):
                                         self.true_params is not None and self.initilialize_fitting_at_true_params and
                                         'type2_criteria' in self.true_params else 1 / self.n_discrete_confidence_levels,
                                    bounds=(0, 1),
-                                   # grid_linspace=(max(0, guess - grid_window), min(1, guess + grid_window), 4))
-                                   grid_linspace=(0.05, 2 / self.n_discrete_confidence_levels, 4))
+                                   grid_range=np.linspace(0.05, 2 / self.n_discrete_confidence_levels, 4))
                          for i, guess in enumerate(guess_criteria)]
                         )
 
             parameters = {k: getattr(self, f"type2_param_{k.split('type2_')[1]}") for k in param_names_type2}
             self.paramset_type2 = ParameterSet(parameters, param_names_type2)
+
+            if self.enable_type2_param_noise and self.type2_noise_logscale and self._type2_noise_logscale_min is None:
+                assert len(self.paramset_type2.parameters['type2_noise'].bounds) == 2
+                self._type2_noise_logscale_min = self.paramset_type2.parameters['type2_noise'].bounds[0]
+
         self.check_type2_constraints()
 
     def print(self):

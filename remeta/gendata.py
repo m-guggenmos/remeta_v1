@@ -5,12 +5,12 @@ import warnings
 try:
     from .configuration import Configuration
     from .dist import get_dist
-    from .transform import compute_signal_dependent_type1_noise, type1_evidence_to_confidence
+    from .transform import compute_signal_dependent_type1_noise, type1_evidence_to_confidence, check_criteria_sum
     from .util import _check_param, TAB, type2roc
 except ImportError:
     from remeta_v1.remeta.configuration import Configuration
     from remeta_v1.remeta.dist import get_dist
-    from remeta_v1.remeta.transform import compute_signal_dependent_type1_noise, type1_evidence_to_confidence
+    from remeta_v1.remeta.transform import compute_signal_dependent_type1_noise, type1_evidence_to_confidence, check_criteria_sum
     from remeta_v1.remeta.util import _check_param, TAB, type2roc
 
 class Simulation:
@@ -122,7 +122,9 @@ def simu_data(nsubjects, nsamples, params, cfg=None, x_stim_external=None, verbo
 
         if cfg.type2_noise_type == 'noisy_readout':
             dist = get_dist(cfg.type2_noise_dist, mode=z1_type1_evidence_mode, scale=params['type2_noise'],
-                            type2_noise_type=cfg.type2_noise_type, lookup_table=lookup_table)  # noqa
+                            log_scale=cfg.type2_noise_logscale,
+                            logscale_min=cfg._type2_noise_logscale_min,
+                            type2_noise_type=cfg.type2_noise_type, experimental_lookup_table=lookup_table)  # noqa
 
             z1_type1_evidence = np.maximum(0, dist.rvs((nsubjects, nsamples)))
         else:
@@ -135,27 +137,25 @@ def simu_data(nsubjects, nsamples, params, cfg=None, x_stim_external=None, verbo
         )
 
         if cfg.type2_noise_type == 'noisy_report':
-
-            if cfg.type2_noise_dist == 'beta':
-                if params['type2_noise'] > 0.5:
-                    raise ValueError(f'type2_noise = {params["type2_noise"]:.2f}, but maximum allowed value for '
-                                     f'type2_noise is 0.5 for metacognitive type {cfg.type2_noise_type} and noise model '
-                                     f'{cfg.type2_noise_dist}')
-
             dist = get_dist(cfg.type2_noise_dist, mode=c_conf_mode, scale=params['type2_noise'],
-                            type2_noise_type=cfg.type2_noise_type, lookup_table=lookup_table)
+                            log_scale=cfg.type2_noise_logscale,
+                            logscale_min=cfg._type2_noise_logscale_min,
+                            type2_noise_type=cfg.type2_noise_type, experimental_lookup_table=lookup_table)
             c_conf = np.maximum(0, np.minimum(1, dist.rvs((nsubjects, nsamples))))
         else:
             c_conf = c_conf_mode
 
-        if cfg.enable_type2_param_criteria or cfg.experimental_discrete_type2_fitting:
+        if cfg.enable_type2_param_criteria or (cfg.type2_fitting_type == 'criteria'):
             if cfg.enable_type2_param_criteria and 'type2_criteria' in params:
                 sum_criteria = np.sum(params['type2_criteria'])
-                if sum_criteria > 1:
-                    raise ValueError(
+                if sum_criteria > 1.001:
+                    old_criteria = params['type2_criteria']
+                    params['type2_criteria'] = check_criteria_sum(params['type2_criteria'])
+                    warnings.warn(
                        '\nThe first entry of the criterion list is a criterion, whereas the subsequent entries encode\n'
                        'the gap to the respective previous criterion. Hence, the sum of all entries in the criterion\n'
-                       f'list must be smaller than 1 (sum = {sum_criteria:.2f}).')
+                       f'list must be smaller than 1, but sum([{", ".join([f"{c:.3f}" for c in old_criteria])}]) = {sum_criteria:.3f}). '
+                       f'Changing criteria to [{", ".join([f"{c:.3f}" for c in params['type2_criteria']])}].', UserWarning)
                 first_criterion_and_gaps = params['type2_criteria']
                 criteria = [v if i == 0 else np.sum(first_criterion_and_gaps[:i+1]) for i, v in enumerate(first_criterion_and_gaps)]
             else:
@@ -167,7 +167,7 @@ def simu_data(nsubjects, nsamples, params, cfg=None, x_stim_external=None, verbo
                         f'of a Bayesian confidence observer for {cfg.n_discrete_confidence_levels} discrete ratings: [{', '.join([f"{v:.3g}" for v in first_criterion_and_gaps])}].\n'
                         'Note that the first entry of the criterion list is a criterion, whereas the subsequent\n'
                         f'entries encode the gap to the respective previous criterion.\n'
-                        f'The final criteria are: [{', '.join([f"{v:.3g}" for v in criteria])}]')
+                        f'The final criteria are: [{', '.join([f"{v:.3g}" for v in criteria])}]', UserWarning)
 
             c_conf = (np.digitize(c_conf, criteria) + 0.5) / cfg.n_discrete_confidence_levels
             c_conf_mode = (np.digitize(c_conf_mode, criteria) + 0.5) / cfg.n_discrete_confidence_levels
@@ -212,6 +212,8 @@ def simu_data(nsubjects, nsamples, params, cfg=None, x_stim_external=None, verbo
             print(f'{TAB}Criterion bias: {type2_criteria_bias:.5g}')
         print('----------------------------------')
         print('Basic stats of the simulated data:')
+        print(f'{TAB}No. subjects: {nsubjects}')
+        print(f'{TAB}No. samples: {nsamples}')
         accuracy = (x_stim_category == d_dec).astype(int)  # noqa
         print(f'{TAB}Performance: {100 * np.mean(accuracy):.1f}% correct')
         choice_bias = 100*d_dec.mean()

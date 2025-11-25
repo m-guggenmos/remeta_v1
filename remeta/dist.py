@@ -160,10 +160,41 @@ class truncated_gumbel:  # noqa
         return x
 
 
-def get_dist(type2_dist, mode, scale, type2_noise_type='noisy_report', lookup_table=None):
+def get_dist(type2_dist, mode, scale, type2_noise_type='noisy_report', log_scale=False, logscale_min=None,
+             experimental_lookup_table=None):
     """
-    Helper function to select appropriately parameterized metacognitive noise distributions.
+    Helper function to select appropriately parameterized type 2 noise distributions.
+
+    Parameters:
+    -----------
+    type2_dist : str
+        Name of the type 2 noise distribution. Check TYPE2_NOISE_DISTS for possible values.
+    mode : array-like of dtype float
+        Metacognitve evidence (noisy-readout) or confidence (noisy-report).
+        Noise distributions are reparametrized such that original noise-free value is the most likely value (i.e.,
+        the mode).
+    scale : float or array-like of dtype float with mode.shape
+        Metacognitve noise
+    type2_noise_type : str (default='noisy_report')
+        Metacognitive noise type. Possible values: 'noisy_report', 'noisy_readout'.
+    log_scale : bool (default: False)
+        If True, apply implicit log transform to the noise parameter.
+        Can be useful, if metacognitive noise clusters tightly around 0.
+    logscale_min : float (default: None)
+        log_scale=True requires setting a minimal value of metacognitive noise.
+    experimental_lookup_table : dict | None (default: None)
+        Experimental option to pass a lookup table for fast computations of truncated distributions. For
+        internal use only.
+
+    Returns:
+    --------
+    scipy.stats continuous distribution instance
     """
+
+    if log_scale:
+        if logscale_min is None:
+            raise ValueError('Applying a log transform to the type 2 noise distribution requires logscale_min')
+        scale = logscale_min * 10**scale
 
     if type2_dist not in TYPE2_NOISE_DISTS:
         raise ValueError(f"Unkonwn distribution '{type2_dist}'.")
@@ -184,12 +215,19 @@ def get_dist(type2_dist, mode, scale, type2_noise_type='noisy_report', lookup_ta
     elif type2_dist == 'lognorm_varstd':
         dist = lognorm(loc=0, scale=np.maximum(1e-5, mode) * np.exp(scale ** 2), s=scale)
     elif type2_dist == 'beta':
+        if scale > 0.5:
+            if scale < 0.5 + 1e-5:
+                scale = min(0.5, scale)
+            else:
+                warnings.warn(f'The noise parameter of the beta distribution must not exceed 0.5, but '
+                              f'it is {scale:.3f}. It will be set to 0.5.', UserWarning)
+                scale = min(0.5, scale)
         a = mode * (1 / scale - 2) + 1
         b = (1 - mode) * (1 / scale - 2) + 1
         dist = beta(a, b)
     elif type2_dist == 'beta_std':
         mode = np.maximum(1e-5, np.minimum(1-1e-5, mode))
-        a = 1 + (1 - mode) * mode**2 / scale**2
+        a = 1 + (1 - mode) * mode ** 2 / scale ** 2
         b = (1/mode - 1) * a - 1/mode + 2
         dist = beta(a, b)
     elif type2_dist == 'betaprime':
@@ -198,11 +236,11 @@ def get_dist(type2_dist, mode, scale, type2_noise_type='noisy_report', lookup_ta
         b = (1 / scale - mode - 1) / (mode + 1)
         dist = betaprime(a, b)
     elif type2_dist == 'gamma':
-        a = (mode + np.sqrt(mode**2 + 4*scale**2))**2 / (4*scale**2)
-        b = (mode + np.sqrt(mode**2 + 4*scale**2)) / (2*scale**2)
+        a = (mode + np.sqrt(mode ** 2 + 4 * scale ** 2)) ** 2 / (4 * scale ** 2)
+        b = (mode + np.sqrt(mode ** 2 + 4 * scale ** 2)) / (2 * scale ** 2)
         dist = gamma(a=a, loc=0, scale=1/b)
     elif type2_dist == 'invgamma':
-        r = scale**2 / mode**2
+        r = scale ** 2 / mode ** 2
         a = (2*r+1 + np.sqrt((2*r+1)**2+8*r)) / (2*r)
         b = mode*(a+1)
         dist = invgamma(a=a, loc=0, scale=b)
@@ -210,15 +248,15 @@ def get_dist(type2_dist, mode, scale, type2_noise_type='noisy_report', lookup_ta
         if type2_noise_type == 'noisy_report':
             if type2_dist.endswith('_lookup') and (type2_dist.startswith('truncated_norm_') or
                                                  type2_dist.startswith('truncated_gumbel_')):
-                m_ind = np.searchsorted(lookup_table['mode'], mode)
-                scale = lookup_table['scale'][np.abs(lookup_table['truncscale'][m_ind] - scale).argmin(axis=-1)]
+                m_ind = np.searchsorted(experimental_lookup_table['mode'], mode)
+                scale = experimental_lookup_table['scale'][np.abs(experimental_lookup_table['truncscale'][m_ind] - scale).argmin(axis=-1)]
             elif type2_dist == 'truncated_norm_fit':
                 mode_ = mode.copy()
                 mode_[mode_ < 0.5] = 1 - mode_[mode_ < 0.5]
-                scale = np.minimum(scale, 1/np.sqrt(12) - 1e-3)
+                scale = np.minimum(scale, 1 / np.sqrt(12) - 1e-3)
                 alpha1, beta1, alpha2, beta2, theta = -0.1512684, 4.15388204, -1.01723445, 2.47820677, 0.73799941
-                scale = scale / (beta1*mode_**alpha1*np.sqrt(1/12-scale**2)) * (mode_ < theta) + \
-                    (np.arctanh(2*np.sqrt(3)*scale) / (beta2*mode_**alpha2)) * (mode_ >= theta)
+                scale = scale / (beta1 * mode_ ** alpha1 * np.sqrt(1 / 12 - scale ** 2)) * (mode_ < theta) + \
+                        (np.arctanh(2 * np.sqrt(3) * scale) / (beta2 * mode_ ** alpha2)) * (mode_ >= theta)
             if type2_dist.startswith('truncated_norm'):
                 dist = truncnorm(-mode / scale, (1 - mode) / scale, loc=mode, scale=scale)
             elif type2_dist.startswith('truncated_gumbel'):
@@ -231,11 +269,11 @@ def get_dist(type2_dist, mode, scale, type2_noise_type='noisy_report', lookup_ta
         elif type2_noise_type == 'noisy_readout':
             if type2_dist.endswith('_lookup') and (type2_dist.startswith('truncated_norm_') or
                                                  type2_dist.startswith('truncated_gumbel_')):
-                m_ind = np.searchsorted(lookup_table['mode'], np.minimum(10, mode))  # atm 10 is the maximum mode
-                scale = lookup_table['scale'][np.abs(lookup_table['truncscale'][m_ind] - scale).argmin(axis=-1)]
+                m_ind = np.searchsorted(experimental_lookup_table['mode'], np.minimum(10, mode))  # atm 10 is the maximum mode
+                scale = experimental_lookup_table['scale'][np.abs(experimental_lookup_table['truncscale'][m_ind] - scale).argmin(axis=-1)]
             elif type2_dist == 'truncated_norm_fit':
                 a, b, c, d, e, f = 0.88632051, -1.45129289, 0.25329918, 2.09066054, -1.2262868, 1.47179606
-                scale = a*scale*(mode+1)**b + c*(mode+1)**f*(np.exp(np.minimum(100, d*scale*(mode+1)**e))-1)
+                scale = a * scale * (mode + 1) ** b + c * (mode + 1) ** f * (np.exp(np.minimum(100, d * scale * (mode + 1) ** e)) - 1)
             if type2_dist.startswith('truncated_norm'):
                 dist = truncnorm(-mode / scale, np.inf, loc=mode, scale=scale)
             elif type2_dist.startswith('truncated_gumbel'):

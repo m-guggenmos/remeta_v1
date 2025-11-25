@@ -9,6 +9,30 @@ except ImportError:
     from remeta_v1.remeta.util import maxfloat
     from remeta_v1.remeta.util import _check_param
 
+
+def check_criteria_sum(criteria):
+    """
+    Ensure that criteria sum up to at most 1
+
+    Parameters
+    ----------
+    criteria : array-like of dtype float
+        Confidence criteria (typically provided as a list)
+
+    Returns
+    ----------
+    criteria : array-like of dtype float
+        Transformed confidence criteria
+    """
+    ind1 = np.where(np.cumsum(criteria) > 1)[0]
+    if len(ind1):
+        for i in ind1[1:]:
+            criteria[i] = 0
+        criteria[ind1[0]] = 1 - np.sum(criteria[:ind1[0]]) + 1e-8
+        # Note: we add 1e-8 to avoid edge cases due to floating point precision
+    return criteria
+
+
 def logistic(x, type1_noise):
     """
     Logistic function

@@ -11,7 +11,7 @@ except ImportError:
 
 
 class Parameter(ReprMixin):
-    def __init__(self, guess, bounds, grid_linspace=None):
+    def __init__(self, guess, bounds, grid_range=None):
         """
         Class that defines the fitting characteristics of a Parameter.
 
@@ -21,16 +21,15 @@ class Parameter(ReprMixin):
             Initial guess for the parameter value.
         bounds: array-like of length 2
             Parameter bounds. The first and second element indicate the lower and upper bound of the parameter.
-        grid_linspace: None | tuple
-            Points to visit in the initial parameter gridsearch search in "numpy linspace" format, i.e.
-            (lower, upper, number_of_grid_points)
+        grid_range: None | array-like (1d)
+            1-d grid for initial gridsearch in the parameter optimization procedure
         """
         self.guess = guess
         self.bounds = bounds
-        self.grid_linspace = bounds if grid_linspace is None else grid_linspace
+        self.grid_range = np.linspace(bounds[0], bounds[1], 4) if grid_range is None else grid_range
 
     def copy(self):
-        return Parameter(self.guess, self.bounds, self.grid_linspace)
+        return Parameter(self.guess, self.bounds, self.grid_range)
 
 
 class ParameterSet(ReprMixin):
@@ -48,6 +47,8 @@ class ParameterSet(ReprMixin):
             List of scipy minimize constraints. Each constraint is a dictionary with keys 'type' and 'fun', where
             'type' is ‘eq’ for equality and ‘ineq’ for inequality, and where fun is a function defining the constraint.
         """
+
+        self.parameters = parameters
         self.param_names = param_names
         self.param_is_list = [isinstance(parameters[name], list) for name in param_names]
         self.param_len = [len(parameters[name]) if self.param_is_list[p] else 1 for p, name in enumerate(param_names)]  # noqa
@@ -57,9 +58,9 @@ class ParameterSet(ReprMixin):
                                    self.param_is_list[p] else [parameters[name].guess] for p, name in enumerate(param_names)], []))
         self.bounds = np.array(sum([[parameters[name][i].bounds for i in range(len(parameters[name]))] if  # noqa
                                    self.param_is_list[p] else [parameters[name].bounds] for p, name in enumerate(param_names)], []))
-        self.grid_linspace = np.array(sum([[parameters[name][i].grid_linspace for i in range(len(parameters[name]))] if  # noqa
-                                   self.param_is_list[p] else [parameters[name].grid_linspace] for p, name in enumerate(param_names)], []),
-                                      dtype=object)
+        self.grid_range = np.array(sum([[parameters[name][i].grid_range for i in range(len(parameters[name]))] if  # noqa
+                                   self.param_is_list[p] else [parameters[name].grid_range] for p, name in enumerate(param_names)], []),
+                                   dtype=object)
         self.constraints = constraints
         self.nparams = len(param_names)
 

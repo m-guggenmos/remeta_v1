@@ -16,7 +16,7 @@ try:
     from .gendata import simu_data
     from .modelspec import Model, Data
     from .plot import plot_evidence_versus_confidence, plot_confidence_dist
-    from .transform import compute_signal_dependent_type1_noise, logistic, type1_evidence_to_confidence, confidence_to_type1_evidence
+    from .transform import compute_signal_dependent_type1_noise, logistic, type1_evidence_to_confidence, confidence_to_type1_evidence, check_criteria_sum
     from .util import _check_param, TAB
     from .util import maxfloat
 except ImportError:
@@ -26,7 +26,7 @@ except ImportError:
     from remeta_v1.remeta.gendata import simu_data
     from remeta_v1.remeta.modelspec import Model, Data
     from remeta_v1.remeta.plot import plot_evidence_versus_confidence, plot_confidence_dist
-    from remeta_v1.remeta.transform import compute_signal_dependent_type1_noise, logistic, type1_evidence_to_confidence, confidence_to_type1_evidence
+    from remeta_v1.remeta.transform import compute_signal_dependent_type1_noise, logistic, type1_evidence_to_confidence, confidence_to_type1_evidence, check_criteria_sum
     from remeta_v1.remeta.util import _check_param, TAB
     from remeta_v1.remeta.util import maxfloat
 
@@ -35,7 +35,7 @@ np.set_printoptions(suppress=True)
 
 class ReMeta:
 
-    def __init__(self, cfg=None, **kwargs):
+    def __init__(self, cfg=None, force_settings=False, **kwargs):
         """
         Main class of the ReMeta toolbox
 
@@ -43,6 +43,8 @@ class ReMeta:
         ----------
         cfg : util.Configuration
             Configuration object. If None is passed, the default configuration is used (but see kwargs).
+        force_settings : bool (default: False)
+            Force settings as specified in the configuration instance
         kwargs : dict
             The kwargs dictionary is parsed for keywords that match keywords of util.Configuration; in case of a match,
             the configuration is set.
@@ -54,7 +56,7 @@ class ReMeta:
             self.cfg = Configuration(**cfg_kwargs)
         else:
             self.cfg = cfg
-        self.cfg.setup()
+        self.cfg.setup(force_settings=force_settings)
 
         if self.cfg.type2_noise_dist.startswith('truncated_') and self.cfg.type2_noise_dist.endswith('_lookup'):
             try:
@@ -370,6 +372,9 @@ class ReMeta:
         params_type2, type2_likelihood = \
             self._helper_negll_type2_noisyreadout(params, mock_binsize, ignore_warnings, final)
 
+        if final and ('type2_criteria' in params_type2) and (np.sum(params_type2['type2_criteria']) > 1.001):
+            params_type2['type2_criteria'] = check_criteria_sum(params_type2['type2_criteria'])
+
         # compute log likelihood
         type2_cum_likelihood = np.nansum(self.model.y_decval_pmf * type2_likelihood, axis=1)
         if self.cfg.experimental_min_uniform_type2_likelihood:
@@ -443,7 +448,8 @@ class ReMeta:
             self.data.c_conf_2d, params_type2)
 
         type2_noise_dist = get_dist(self.cfg.type2_noise_dist, mode=self.model.z1_type1_evidence, scale=params_type2['type2_noise'],
-                                    type2_noise_type='noisy_readout', lookup_table=self.lookup_table)
+                                    logscale_min=self.cfg._type2_noise_logscale_min,
+                                    type2_noise_type='noisy_readout', log_scale=self.cfg.type2_noise_logscale, experimental_lookup_table=self.lookup_table)
         if self.cfg.experimental_disable_type2_binsize:
             type2_likelihood = type2_noise_dist.pdf(data_z1_type1_evidence)
         else:
@@ -473,7 +479,9 @@ class ReMeta:
                 data_z1_type1_evidence_ub = self._confidence_to_type1_evidence(upper_bin_edge, params_type2, mask=cnd)
                 type2_noise_dist = get_dist(self.cfg.type2_noise_dist, mode=self.model.z1_type1_evidence[cnd],
                                             scale=params_type2['type2_noise'], type2_noise_type='noisy_readout',
-                                            lookup_table=self.lookup_table)
+                                            log_scale=self.cfg.type2_noise_logscale,
+                                            logscale_min=self.cfg._type2_noise_logscale_min,
+                                            experimental_lookup_table=self.lookup_table)
 
                 type2_likelihood[cnd] = (type2_noise_dist.cdf(data_z1_type1_evidence_ub) -
                                          type2_noise_dist.cdf(data_z1_type1_evidence_lb))
@@ -507,6 +515,9 @@ class ReMeta:
 
         params_type2, z1_type1_evidence, type2_likelihood = \
             self._helper_negll_type2_noisyreport(params, mock_binsize, ignore_warnings, final)
+
+        if final and ('type2_criteria' in params_type2) and (np.sum(params_type2['type2_criteria']) > 1.001):
+            params_type2['type2_criteria'] = check_criteria_sum(params_type2['type2_criteria'])
 
         # compute weighted cumulative negative log likelihood
         type2_cum_likelihood = np.nansum(type2_likelihood * self.model.y_decval_pmf, axis=1)
@@ -556,22 +567,13 @@ class ReMeta:
             z1_type1_evidence = self.model.z1_type1_evidence
 
         self.model.c_conf = self._type1_evidence_to_confidence(z1_type1_evidence, params_type2)
-        type2_noise = params_type2['type2_noise']
-        if (self.cfg.type2_noise_dist == 'beta') and (type2_noise > 0.5):
-            if type2_noise < 0.5 + 1e-5:
-                type2_noise = min(0.5, type2_noise)
-            else:
-                warnings.warn(f'type2_noise = {type2_noise:.2f}, but maximum allowed '
-                              f'value for type2_noise is 0.5 for metacognitive type '
-                              f'{self.cfg.type2_noise_type} and noise model {self.cfg.type2_noise_dist}')
-                type2_noise = min(0.5, type2_noise)
 
         if self.cfg.type2_fitting_type == 'criteria':
             type2_likelihood = self._compute_likelihood_noisyreport_criteria(
-                type2_noise, params_type2['type2_criteria'] if self.cfg.enable_type2_param_criteria else None
+                params_type2['type2_noise'], params_type2['type2_criteria'] if self.cfg.enable_type2_param_criteria else None
             )
         else:
-            type2_likelihood = self._compute_likelihood_noisyreport(type2_noise, mock_binsize=mock_binsize)
+            type2_likelihood = self._compute_likelihood_noisyreport(params_type2['type2_noise'], mock_binsize=mock_binsize)
 
         if not self.cfg.experimental_include_incongruent_y_decval:
             type2_likelihood[self.model.y_decval_invalid] = np.nan
@@ -607,7 +609,9 @@ class ReMeta:
                     upper_bin_edge = np.sum(criteria_[:i+1])
                 # nsamples += cnd.sum()
                 dist = get_dist(self.cfg.type2_noise_dist, mode=self.model.c_conf[cnd], scale=type2_noise,
-                                type2_noise_type='noisy_report', lookup_table=self.lookup_table)
+                                type2_noise_type='noisy_report', log_scale=self.cfg.type2_noise_logscale,
+                                logscale_min=self.cfg._type2_noise_logscale_min,
+                                experimental_lookup_table=self.lookup_table)
                 type2_likelihood[cnd] = (dist.cdf(min(1, upper_bin_edge)) - dist.cdf(lower_bin_edge))
                 # print(i, lower_bin_edge, upper_bin_edge, -np.log(type2_likelihood[cnd, 50]).sum(), cnd.sum())
 
@@ -626,7 +630,9 @@ class ReMeta:
         else:
             binsize_neg, binsize_pos = binsize, binsize
         dist = get_dist(self.cfg.type2_noise_dist, mode=self.model.c_conf, scale=type2_noise,
-                        type2_noise_type='noisy_report', lookup_table=self.lookup_table)
+                        type2_noise_type='noisy_report', log_scale=self.cfg.type2_noise_logscale,
+                        logscale_min=self.cfg._type2_noise_logscale_min,
+                        experimental_lookup_table=self.lookup_table)
         # compute the probability of the actual confidence ratings given the pred confidence
         if self.cfg.experimental_disable_type2_binsize:
             type2_likelihood = dist.pdf(self.data.c_conf_2d)

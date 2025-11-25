@@ -45,7 +45,7 @@ def fine_grid_search(x0, fun, args, param_set, ll_grid, valid, gridsearch_resolu
     gx0 = x0
     gll_min_grid = np.min(ll_grid)
     grid_candidates = [valid[i] for i in np.argsort(ll_grid)[:n_grid_candidates_init]]
-    previous_grid_range = [[np.linspace(*ls) for ls in param_set.grid_linspace] for _ in range(n_grid_candidates_init)]
+    previous_grid_range = [param_set.grid_range for _ in range(n_grid_candidates_init)]
     candidate_ids = list(range(n_grid_candidates_init))
     counter = 0
     for i in range(n_grid_iter):
@@ -114,10 +114,10 @@ def fmincon(fun, param_set, args, gridsearch=False, grid_multiproc=True,
     bounds = Bounds(*old_bound_to_new(param_set.bounds), keep_feasible=True)
     if gridsearch:
         if param_set.constraints is not None and len(param_set.constraints):
-            valid = [p for p in product(*[np.linspace(*ls) for ls in param_set.grid_linspace]) if
+            valid = [p for p in product(*param_set.grid_range) if
                      np.all([con['fun'](p) >= 0 for con in param_set.constraints])]
         else:
-            valid = list(product(*[np.linspace(*ls) for ls in param_set.grid_linspace]))
+            valid = list(product(*param_set.grid_range))
         if verbose:
             print(f"Grid search activated (grid size = {len(valid)})")
         t0 = timeit.default_timer()
@@ -203,7 +203,6 @@ def fmincon(fun, param_set, args, gridsearch=False, grid_multiproc=True,
                     for eps in slsqp_epsilon_:
                         fit_ = minimize(fun, x0, bounds=bounds, args=tuple(args), constraints=param_set.constraints,
                                         method='slsqp', options=dict(eps=eps))
-                        print(fit_.fun)
                         if fit_.fun < min_fun:
                             min_fun = fit_.fun
                             fit = fit_

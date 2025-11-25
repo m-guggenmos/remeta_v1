@@ -23,7 +23,7 @@ A minimal example would be the following:
 ```python
 # Minimal example
 import remeta_v1 as remeta
-x_stim, d_dec, c_conf = remeta.load_dataset('default', return_params=True)  # load example dataset
+x_stim, d_dec, c_conf = remeta.load_dataset('default')  # load example dataset
 rem = remeta.ReMeta()
 rem.fit(x_stim, d_dec, c_conf)
 ```
@@ -36,45 +36,44 @@ Loading dataset 'default' which was generated as follows:
 ..Generative parameters:
     type1_noise: 0.5
     type1_bias: -0.1
-    type2_noise: 0.2
+    type2_noise: 7
     type2_criteria: [0.2, 0.2, 0.2, 0.2] = gaps | criteria = [0.2, 0.4, 0.6, 0.8]
 ..Characteristics:
     No. subjects: 1
-    No. samples: 1000
-    Type 1 performance: 86.4%
-    Avg. confidence: 0.620
-    M-Ratio: 0.549
+    No. samples: 2000
+    Type 1 performance: 86.5%
+    Avg. confidence: 0.665
+    M-Ratio: 0.862
     Criterion bias: 0
 ```
 Output (for fit):
 ```
 +++ Type 1 level +++
-Initial guess (neg. LL: 354.54)
+Initial guess (neg. LL: 692.75)
     [guess] type1_noise: 0.5
     [guess] type1_bias: 0
 Performing local optimization
-    [final] type1_noise: 0.514
-    [final] type1_bias: -0.0913
-Final neg. LL: 348.77
-Total fitting time: 0.11 secs
+    [final] type1_noise: 0.503
+    [final] type1_bias: -0.0821
+Final neg. LL: 683.64
+Total fitting time: 0.14 secs
 +++ Type 2 level +++
-Initial guess (neg. LL: 1808.28)
-    [guess] type2_noise: 0.2
+Initial guess (neg. LL: 3902.60)
+    [guess] type2_noise: 8.952
     [guess] type2_criteria_0: 0.2
     [guess] type2_criteria_1: 0.2 = gap | criterion = 0.4
     [guess] type2_criteria_2: 0.2 = gap | criterion = 0.6
     [guess] type2_criteria_3: 0.2 = gap | criterion = 0.8
 Performing local optimization
-1805.8993964328206
-    [final] type2_noise: 0.229
-    [final] type2_criteria_0: 0.207
-    [final] type2_criteria_1: 0.17 = gap | criterion = 0.377
-    [final] type2_criteria_2: 0.204 = gap | criterion = 0.581
-    [final] type2_criteria_3: 0.213 = gap | criterion = 0.794
-    [extra] type2_criteria_absolute: [0.207, 0.377, 0.581, 0.794]
-    [extra] type2_criteria_bias: -0.0077
-Final neg. LL: 1805.90
-Total fitting time: 3 secs
+    [final] type2_noise: 6.98
+    [final] type2_criteria_0: 0.179
+    [final] type2_criteria_1: 0.218 = gap | criterion = 0.398
+    [final] type2_criteria_2: 0.203 = gap | criterion = 0.6
+    [final] type2_criteria_3: 0.208 = gap | criterion = 0.809
+    [extra] type2_criteria_absolute: [0.179, 0.398, 0.6, 0.809]
+    [extra] type2_criteria_bias: 0.0107
+Final neg. LL: 3312.87
+Total fitting time: 12 secs
 ```
 
 Since the dataset is based on simulation, we know the true parameters of the underlying generative model (see first output), which are quite close to the fitted parameters.
@@ -90,10 +89,10 @@ for k, v in result.model.params.items():
 
 Ouput:
 ```
-type1_noise: 0.514
-type1_bias: -0.091
-type2_noise: 0.229
-type2_criteria: 0.207, 0.170, 0.204, 0.213
+type1_noise: 0.503
+type1_bias: -0.082
+type2_noise: 6.978
+type2_criteria: 0.179, 0.218, 0.203, 0.208
 ```
 
 By default, the model fits parameters for type 1 noise (`type1_noise`) and a type 1 bias (`type1_bias`), as well as metacognitive 'type 2' noise (`type2_noise`) and 4 confidence criteria (`type2_criteria`). Moreover, by default the model assumes that metacognitive noise occurs at the stage of the confidence report (setting `type2_noise_type='noisy_report'`) and that type 2 metacognitive noise can be described by a beta distribution (setting `type2_noise_dist='beta'`).

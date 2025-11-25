@@ -9,6 +9,7 @@ from type2roc import type2roc
 from scipy.stats import norm
 import gzip
 
+# mode = 'default'
 # mode = 'type1_only'
 # mode = 'type1_complex'
 # mode = 'type2_multiplicative_bias'
@@ -23,8 +24,19 @@ def conf(x, bounds):
 bounds = np.arange(0, 0.81, 0.2)
 
 skip_type2 = False
-if mode == 'type1_only':
-    nsamples = 1000
+if mode == 'default':
+    nsamples = 2000
+    seed = 1
+    x_stim_stepsize = 0.25
+    params = dict(
+        type1_noise=0.5,
+        type1_bias=-0.1,
+        type2_noise=7,
+        type2_criteria=[0.2, 0.2, 0.2, 0.2]
+    )
+    cfg = remeta.Configuration()
+elif mode == 'type1_only':
+    nsamples = 2000
     seed = 1
     x_stim_stepsize = 0.25
     params = dict(
@@ -34,7 +46,7 @@ if mode == 'type1_only':
     cfg = remeta.Configuration()
     skip_type2 = True
 elif mode == 'type1_complex':
-    nsamples = 5000
+    nsamples = 2000
     seed = 1
     x_stim_stepsize = 0.02
     params = dict(
@@ -48,26 +60,26 @@ elif mode == 'type1_complex':
     cfg.enable_type1_param_bias = 2
     skip_type2 = True
 elif mode == 'type2_multiplicative_bias':
-    nsamples = 1000
+    nsamples = 2000
     seed = 1
     x_stim_stepsize = 0.25
     params = dict(
         type1_noise=0.6,
         type1_bias=0,
-        type2_noise=0.1,
+        type2_noise=7,
         type2_evidence_bias_mult=0.8,
     )
     cfg = remeta.Configuration()
     cfg.enable_type2_param_criteria = 0
     cfg.enable_type2_param_evidence_bias_mult = 1
 elif mode == 'noisy_readout':
-    nsamples = 1000
-    seed = 1
+    nsamples = 2000
+    seed = 5
     x_stim_stepsize = 0.25
     params = dict(
         type1_noise=0.4,
         type1_bias=0,
-        type2_noise=0.1,
+        type2_noise=7,
         type2_criteria=[0.3, 0.4, 0.1, 0.1]
     )
     cfg = remeta.Configuration()
